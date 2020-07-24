@@ -15,16 +15,20 @@
 package loader
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/byteorder"
+	"github.com/cilium/cilium/pkg/common"
 	"github.com/cilium/cilium/pkg/datapath"
 	"github.com/cilium/cilium/pkg/datapath/link"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
@@ -34,6 +38,7 @@ import (
 	"github.com/cilium/cilium/pkg/elf"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/mac"
 	"github.com/cilium/cilium/pkg/maps/callsmap"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
@@ -132,6 +137,63 @@ func nullifyStringSubstitutions(strings map[string]string) map[string]string {
 	return nullStrings
 }
 
+// patchHostNetdevHeaderFile creates a header file corresponding to each new
+// device to which bpf_host is attached, including the second host device and
+// native devices.
+func patchHostNetdevHeaderFile(stateDir, ifName string, mac mac.MAC, ifIndex uint32,
+	secctxFromIpcache uint32, nodePort bool) (netdevHeaderFile string, err error) {
+	netdevHeaderFilename := strings.Replace(common.CHeaderFileName, ".h", "_"+ifName+".h", 1)
+	netdevHeaderFile = path.Join(stateDir, netdevHeaderFilename)
+	headerFile := path.Join(stateDir, common.CHeaderFileName)
+
+	fin, err := os.Open(headerFile)
+	if err != nil {
+		return
+	}
+	defer fin.Close()
+	fout, err := os.Create(netdevHeaderFile)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(netdevHeaderFile)
+		}
+	}()
+	defer fout.Close()
+
+	rd := bufio.NewReader(fin)
+	for {
+		line, err := rd.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return netdevHeaderFile, err
+		}
+		if nodePort {
+			if strings.HasPrefix(line, "/* Fake values") {
+				// We're replacing the fake values so no need for warning anymore.
+				continue
+			} else if strings.HasPrefix(line, "DEFINE_U32(NATIVE_DEV_IFINDEX") {
+				line = fmt.Sprintf("DEFINE_U32(NATIVE_DEV_IFINDEX, %#08x);\t/* %d */\n",
+					ifIndex, ifIndex)
+			}
+		}
+		if strings.HasPrefix(line, "DEFINE_MAC(NODE_MAC") {
+			line = fmt.Sprintf("DEFINE_MAC(NODE_MAC, %s);\n", common.GoArray2C(mac))
+		} else if strings.HasPrefix(line, "DEFINE_U32(SECCTX_FROM_IPCACHE") {
+			line = fmt.Sprintf("DEFINE_U32(SECCTX_FROM_IPCACHE, %#08x);\t/* %d */\n",
+				secctxFromIpcache, secctxFromIpcache)
+		}
+		if _, err := fout.WriteString(line); err != nil {
+			return netdevHeaderFile, err
+		}
+		if err == io.EOF {
+			break
+		}
+	}
+
+	return
+}
+
 // Since we attach the host endpoint datapath to two different interfaces, we
 // need two different NODE_MAC values. patchHostNetdevDatapath creates a new
 // object file for the native device, from the object file for the host device
@@ -185,7 +247,17 @@ func patchHostNetdevDatapath(ep datapath.Endpoint, objPath, dstPath, ifName stri
 	callsMapHostDevice := bpf.LocalMapName(callsmap.HostMapName, uint16(ep.GetID()))
 	strings[callsMapHostDevice] = bpf.LocalMapName(callsmap.NetdevMapName, uint16(ifIndex))
 
-	return hostObj.Write(dstPath, opts, strings)
+	// Write object and header files specific to ifName.
+	netdevHeaderFile, err := patchHostNetdevHeaderFile(ep.StateDir(), ifName, mac,
+		ifIndex, opts["SECCTX_FROM_IPCACHE"], option.Config.EnableNodePort)
+	if err != nil {
+		return err
+	}
+	err = hostObj.Write(dstPath, opts, strings)
+	if err != nil {
+		os.Remove(netdevHeaderFile)
+	}
+	return err
 }
 
 // reloadHostDatapath loads bpf_host programs attached to the host device
