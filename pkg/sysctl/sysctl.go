@@ -31,13 +31,13 @@ import (
 )
 
 const (
-	Subsystem = "sysctl"
+	subsystem = "sysctl"
 
 	prefixDir = "/proc/sys"
 )
 
 var (
-	log = logging.DefaultLogger.WithField(logfields.LogSubsys, Subsystem)
+	log = logging.DefaultLogger.WithField(logfields.LogSubsys, subsystem)
 
 	// parameterElemRx matches an element of a sysctl parameter.
 	parameterElemRx = regexp.MustCompile(`\A[-0-9_a-z]+\z`)
@@ -116,6 +116,7 @@ func Read(name string) (string, error) {
 	return strings.TrimRight(string(val), "\n"), nil
 }
 
+// ApplySettings applies all settings in sysSettings.
 func ApplySettings(sysSettings []Setting) error {
 	for _, s := range sysSettings {
 		log.WithFields(logrus.Fields{
