@@ -23,7 +23,7 @@ import (
 
 var _ = Describe("K8sConformance", func() {
 	SkipContextIf(func() bool {
-		return helpers.RunsWithKubeProxyReplacement() || helpers.GetCurrentIntegration() == helpers.CIIntegrationFlannel
+		return helpers.RunsWithoutKubeProxy() || helpers.GetCurrentIntegration() == helpers.CIIntegrationFlannel
 	}, "Portmap Chaining", func() {
 		var (
 			kubectl                         *helpers.Kubectl
@@ -40,7 +40,8 @@ var _ = Describe("K8sConformance", func() {
 			connectivityCheckYamlSimple = kubectl.GetFilePath("../examples/kubernetes/connectivity-check/connectivity-check-single-node.yaml")
 
 			deployOpts := map[string]string{
-				"cni.chainingMode": "portmap",
+				"kubeProxyReplacement": "disabled",
+				"cni.chainingMode":     "portmap",
 				// When kube-proxy is enabled, the host firewall is not
 				// compatible with portmap chaining because traffic
 				// from pods to remote nodes goes through the tunnel.

@@ -1919,8 +1919,9 @@ Secondary Interface %s :: IPv4: (%s, %s), IPv6: (%s, %s)`, helpers.DualStackSupp
 			})
 		})
 
-		SkipItIf(helpers.RunsWithKubeProxyReplacement, "Tests NodePort (kube-proxy) with externalTrafficPolicy=Local", func() {
+		SkipItIf(helpers.RunsWithoutKubeProxy, "Tests NodePort (kube-proxy) with externalTrafficPolicy=Local", func() {
 			DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
+				"kubeProxyReplacement": "disabled",
 				// When kube-proxy is enabled, the host firewall is not
 				// compatible with externalTrafficPolicy=Local because traffic
 				// from pods to remote nodes goes through the tunnel.
