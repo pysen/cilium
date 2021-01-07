@@ -171,7 +171,7 @@ pipeline {
                     )}"""
                 KUBEPROXY="""${sh(
                     returnStdout: true,
-                    script: 'if [ "${KERNEL}" = "net-next" ] || [ "${KERNEL}" = "419" ]; then echo -n "0"; else echo -n ""; fi'
+                    script: 'if [ "${KERNEL}" = "net-next" ] || [ "${KERNEL}" = "419" ]; then echo -n "1"; else echo -n ""; fi'
                     )}"""
             }
             steps {
@@ -223,7 +223,7 @@ pipeline {
                     )}"""
                 KUBEPROXY="""${sh(
                     returnStdout: true,
-                    script: 'if [ "${KERNEL}" = "net-next" ] || [ "${KERNEL}" = "419" ]; then echo -n "0"; else echo -n ""; fi'
+                    script: 'if [ "${KERNEL}" = "net-next" ] || [ "${KERNEL}" = "419" ]; then echo -n "1"; else echo -n ""; fi'
                     )}"""
                 CILIUM_IMAGE = """${sh(
                         returnStdout: true,
