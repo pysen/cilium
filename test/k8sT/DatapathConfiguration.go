@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Authors of Cilium
+// Copyright 2017-2021 Authors of Cilium
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -199,14 +199,13 @@ var _ = Describe("K8sDatapathConfig", func() {
 			Expect(status.IntOutput()).Should(Equal(numEntries), "Did not find expected number of entries in BPF tunnel map")
 		}
 
-		It("Check connectivity with transparent encryption and VXLAN encapsulation", func() {
+		SkipItIf(helpers.RunsWithKubeProxyReplacement, "Check connectivity with transparent encryption and VXLAN encapsulation", func() {
 			// FIXME(brb) Currently, the test is broken with CI 4.19 setup. Run it on 4.19
 			//			  once we have kube-proxy disabled there.
 			if !helpers.RunsOnNetNextKernel() {
 				Skip("Skipping test because it is not running with the net-next kernel")
 				return
 			}
-			SkipItIfNoKubeProxy()
 
 			deploymentManager.Deploy(helpers.CiliumNamespace, IPSecSecret)
 			deploymentManager.DeployCilium(map[string]string{
@@ -329,7 +328,7 @@ var _ = Describe("K8sDatapathConfig", func() {
 				"autoDirectNodeRoutes": "true",
 			}
 			// Needed to bypass bug with masquerading when devices are set. See #12141.
-			if helpers.RunsWithKubeProxy() {
+			if helpers.RunsWithoutKubeProxyReplacement() {
 				options["masquerade"] = "false"
 			}
 			deploymentManager.DeployCilium(options, DeployCiliumOptionsAndDNS)
@@ -351,7 +350,7 @@ var _ = Describe("K8sDatapathConfig", func() {
 				"hostFirewall":           "false",
 			}
 			// Needed to bypass bug with masquerading when devices are set. See #12141.
-			if helpers.RunsWithKubeProxy() {
+			if helpers.RunsWithoutKubeProxyReplacement() {
 				options["masquerade"] = "false"
 			}
 			deploymentManager.DeployCilium(options, DeployCiliumOptionsAndDNS)
@@ -556,10 +555,9 @@ var _ = Describe("K8sDatapathConfig", func() {
 	})
 
 	Context("Transparent encryption DirectRouting", func() {
-		It("Check connectivity with transparent encryption and direct routing", func() {
+		SkipItIf(helpers.RunsWithKubeProxyReplacement, "Check connectivity with transparent encryption and direct routing", func() {
 			SkipIfIntegration(helpers.CIIntegrationFlannel)
 			SkipIfIntegration(helpers.CIIntegrationGKE)
-			SkipItIfNoKubeProxy()
 
 			privateIface, err := kubectl.GetPrivateIface()
 			Expect(err).Should(BeNil(), "Unable to determine private iface")
@@ -575,10 +573,9 @@ var _ = Describe("K8sDatapathConfig", func() {
 			}, DeployCiliumOptionsAndDNS)
 			Expect(testPodConnectivityAcrossNodes(kubectl)).Should(BeTrue(), "Connectivity test between nodes failed")
 		})
-		It("Check connectivity with transparent encryption and direct routing with bpf_host", func() {
+		SkipItIf(helpers.RunsWithKubeProxyReplacement, "Check connectivity with transparent encryption and direct routing with bpf_host", func() {
 			SkipIfIntegration(helpers.CIIntegrationFlannel)
 			SkipIfIntegration(helpers.CIIntegrationGKE)
-			SkipItIfNoKubeProxy()
 
 			privateIface, err := kubectl.GetPrivateIface()
 			Expect(err).Should(BeNil(), "Unable to determine private iface")
