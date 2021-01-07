@@ -63,3 +63,14 @@ func IsInfraContainer(labels map[string]string) bool {
 	return labels[types.KubernetesContainerNameLabel] == "POD"
 
 }
+
+// IsPodRunning returns true if the pod is considered to be in running state.
+// We consider a Running pod a pod that does not report a Failed nor a Succeeded
+// pod Phase.
+func IsPodRunning(phase v1.PodPhase) bool {
+	switch phase {
+	case v1.PodFailed, v1.PodSucceeded:
+		return false
+	}
+	return true
+}

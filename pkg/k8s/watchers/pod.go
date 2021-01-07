@@ -179,6 +179,16 @@ func (k *K8sWatcher) addK8sPodV1(pod *types.Pod) error {
 		"hostIP":               pod.StatusHostIP,
 	})
 
+	// In Kubernetes Jobs, Pods can be left in Kubernetes until the Job
+	// is deleted. If the Job is never deleted, Cilium will never receive a Pod
+	// delete event, causing the IP to be left in the ipcache.
+	// For this reason we should delete the ipcache entries whenever the pod
+	// status is either PodFailed or PodSucceeded as it means the IP address
+	// is no longer in use.
+	if !k8sUtils.IsPodRunning(pod.StatusPhase) {
+		return k.deleteK8sPodV1(pod)
+	}
+
 	skipped, err := k.updatePodHostIP(pod)
 	switch {
 	case skipped:
@@ -200,6 +210,16 @@ func (k *K8sWatcher) addK8sPodV1(pod *types.Pod) error {
 func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *types.Pod) error {
 	if oldK8sPod == nil || newK8sPod == nil {
 		return nil
+	}
+
+	// In Kubernetes Jobs, Pods can be left in Kubernetes until the Job
+	// is deleted. If the Job is never deleted, Cilium will never receive a Pod
+	// delete event, causing the IP to be left in the ipcache.
+	// For this reason we should delete the ipcache entries whenever the pod
+	// status is either PodFailed or PodSucceeded as it means the IP address
+	// is no longer in use.
+	if !k8sUtils.IsPodRunning(newK8sPod.StatusPhase) {
+		return k.deleteK8sPodV1(newK8sPod)
 	}
 
 	// The pod IP can never change, it can only switch from unassigned to

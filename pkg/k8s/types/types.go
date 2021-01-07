@@ -62,6 +62,7 @@ type Pod struct {
 	StatusHostIP           string
 	SpecServiceAccountName string
 	SpecHostNetwork        bool
+	StatusPhase            v1.PodPhase
 
 	// For Istio we need to keep these:
 	SpecContainers []PodContainer
