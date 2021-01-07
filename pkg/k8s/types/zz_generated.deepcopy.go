@@ -262,6 +262,10 @@ func (in *Pod) DeepCopyInto(out *Pod) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.StatusStartTime != nil {
+		in, out := &in.StatusStartTime, &out.StatusStartTime
+		*out = (*in).DeepCopy()
+	}
 	if in.SpecContainers != nil {
 		in, out := &in.SpecContainers, &out.SpecContainers
 		*out = make([]PodContainer, len(*in))

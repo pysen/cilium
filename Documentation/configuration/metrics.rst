@@ -75,6 +75,8 @@ Endpoint
 Name                                         Labels                                             Description
 ============================================ ================================================== ========================================================
 ``endpoint_count``                                                                              Number of endpoints managed by this agent
+``endpoint_active_gc_count``                                                                    Number of endpoint active garbage collection routines
+``endpoint_gc_count``                                                                           Number of endpoints garbage collected via k8s deletion events
 ``endpoint_regenerations``                   ``outcome``                                        Count of all endpoint regenerations that have completed
 ``endpoint_regeneration_time_stats_seconds`` ``scope``                                          Endpoint regeneration time stats
 ``endpoint_state``                           ``state``                                          Count of all endpoints

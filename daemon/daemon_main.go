@@ -740,6 +740,10 @@ func init() {
 	flags.Int(option.EndpointQueueSize, defaults.EndpointQueueSize, "size of EventQueue per-endpoint")
 	option.BindEnv(option.EndpointQueueSize)
 
+	flags.Duration(option.EndpointGCThreshold, 1*time.Minute, "If a CNI delete event is missed, endpoint must be this old to be garbage collected via k8s watcher")
+	flags.MarkHidden(option.EndpointGCThreshold)
+	option.BindEnv(option.EndpointGCThreshold)
+
 	flags.Bool(option.SelectiveRegeneration, true, "only regenerate endpoints which need to be regenerated upon policy changes")
 	flags.MarkHidden(option.SelectiveRegeneration)
 	option.BindEnv(option.SelectiveRegeneration)

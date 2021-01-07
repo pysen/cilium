@@ -593,6 +593,7 @@ func ConvertToPod(obj interface{}) interface{} {
 			SpecHostNetwork:        concreteObj.Spec.HostNetwork,
 			SpecContainers:         containers,
 			StatusPhase:            concreteObj.Status.Phase,
+			StatusStartTime:        concreteObj.Status.StartTime,
 		}
 		*concreteObj = v1.Pod{}
 		return p

@@ -101,6 +101,7 @@ type endpointManager interface {
 	GetEndpoints() []*endpoint.Endpoint
 	LookupPodName(string) *endpoint.Endpoint
 	WaitForEndpointsAtPolicyRev(ctx context.Context, rev uint64) error
+	DeleteEndpoint(*endpoint.Endpoint) int
 }
 
 type nodeDiscoverManager interface {

@@ -370,6 +370,79 @@ func (k *K8sWatcher) updatePodHostIP(pod *types.Pod) (bool, error) {
 	return skipped, nil
 }
 
+// Find an endpoint corresponding to the specified pod. This function makes
+// assumptions about the specified pod being deleted, it is *NOT* a generic
+// endpoint->pod correlation function.
+//
+// Returns an Endpoint if one is found that matches the specific pod.
+func (k *K8sWatcher) findEndpointForDeletedPod(pod *types.Pod) *endpoint.Endpoint {
+	podNSName := k8sUtils.GetObjNamespaceName(&pod.ObjectMeta)
+	ep := k.endpointManager.LookupPodName(podNSName)
+	if ep == nil {
+		return nil
+	}
+
+	// We don't have a containerID for the pod, and it's not sufficient to
+	// use the pod namespace+name to uniquely identify an endpoint as the
+	// exact same pod (since a new pod can be provisioned with the same
+	// name). Instead we use the creation time of the endpoint and the
+	// start time of the pod to infer that this endpoint corresponds to the
+	// instance of the pod that is being deleted. This pattern should work
+	// for the more common case since the CNI ADD will always occur first
+	// and then the pod will start later after the network is successfully
+	// provisioned by Cilium.
+	//
+	// Account for the following cases:
+	// * Endpoint is older than the pod. If we reach this point, we know
+	//   that the endpoint doesn't represent a newly provisioned instance
+	//   of the pod due to the creation timestamp. We also know that the
+	//   timestamp is valid because the creation timestamp is initialized
+	//   upon either endpoint creation or restore, and in the latter case
+	//   the pod start time would be newer. Furthermore, we know that we
+	//   have missed the CNI delete event because otherwise the endpoint
+	//   would already be deleted and this function would return above.
+	//   So, the pod should correspond to this endpoint, the deletion
+	//   request is legitimate, and we should honor it to delete the
+	//   endpoint.
+	if ep.GetCreatedAt().Before(pod.StatusStartTime.Time) {
+		return ep
+	}
+
+	// * Endpoint is newer than the pod. This can occur either when the
+	//   agent was restarted (so the endpoint creation time is incorrect),
+	//   or in general if there was a pod which was deleted, and then a new
+	//   pod with the same name was created (and hence there is a
+	//   corresponding new endpoint). In the latter case, even though the
+	//   original pod was deleted, the k8s pod deletion event may be in
+	//   flight during creation of the new endpoint. There is no guaranteed
+	//   ordering between the CNI DELETE, k8s delete, and new CNI ADD
+	//   (which then creates the endpoint).
+	//
+	//   In these cases, we give the apiserver some time to deliver the
+	//   delete event. If the endpoint creation time is out of order vs.
+	//   the pod start time (conditional statement above), and the delete
+	//   event occurs within a short period since the endpoint was created
+	//   (conditional statement below), then it's likely that the endpoint
+	//   represents a newly created pod and we are now processing the
+	//   delete event for the previous pod. Given that there's a new pod in
+	//   place with the same name, we should *not* delete this endpoint, or
+	//   we may break networking for a newly active pod!
+	//
+	//   On the other hand, the longer it has been since the endpoint
+	//   creation time, the likelier it becomes that any in-flight pod
+	//   deletion events for the older pod instance have already been
+	//   processed, and the more likely that we're just hitting the first
+	//   case above where the pod predates the current Cilium run, in which
+	//   case we *should* clean up the endpoint, as it may represent a
+	//   legitimate deletion for a pod that was created prior to Cilium
+	//   startup.
+	if ep.GetCreatedAt().Add(option.Config.EndpointGCThreshold).Before(time.Now()) {
+		return ep
+	}
+
+	return nil
+}
+
 func (k *K8sWatcher) deletePodHostIP(pod *types.Pod) (bool, error) {
 	if pod.SpecHostNetwork {
 		return true, fmt.Errorf("pod is using host networking")
@@ -384,6 +457,16 @@ func (k *K8sWatcher) deletePodHostIP(pod *types.Pod) (bool, error) {
 		errs    []string
 		skipped bool
 	)
+
+	if ep := k.findEndpointForDeletedPod(pod); ep != nil {
+		go func(ep *endpoint.Endpoint) {
+			metrics.EndpointGCCount.Inc()
+			metrics.EndpointActiveGCCount.Inc()
+			// We don't care how many errors occurred, the callee will log them.
+			_ = k.endpointManager.DeleteEndpoint(ep)
+			metrics.EndpointActiveGCCount.Dec()
+		}(ep)
+	}
 
 	for _, podIP := range pod.StatusPodIPs {
 		// a small race condition exists here as deletion could occur in

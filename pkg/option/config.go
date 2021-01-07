@@ -587,6 +587,11 @@ const (
 	// EndpointQueueSize is the size of the EventQueue per-endpoint.
 	EndpointQueueSize = "endpoint-queue-size"
 
+	// EndpointGCThreshold is the age an endpoint must be to allow it to
+	// be deleted via k8s pod deletion events (assuming that we do not
+	// know the pod creation time).
+	EndpointGCThreshold = "endpoint-gc-threshold"
+
 	// SelectiveRegeneration specifies whether only the endpoints which policy
 	// changes select should be regenerated upon policy changes.
 	SelectiveRegeneration = "enable-selective-regeneration"
@@ -1312,6 +1317,11 @@ type DaemonConfig struct {
 	// in the case where a cluster might be under high load for endpoint-related
 	// events, specifically those which cause many regenerations.
 	EndpointQueueSize int
+
+	// EndpointGCThreshold is the age an endpoint must be to allow it to
+	// be deleted via k8s pod deletion events (assuming that we do not
+	// know the pod creation time).
+	EndpointGCThreshold time.Duration
 
 	// SelectiveRegeneration, when true, enables the functionality to only
 	// regenerate endpoints which are selected by the policy rules that have
@@ -2197,6 +2207,7 @@ func (c *DaemonConfig) Populate() {
 	c.CMDRefDir = viper.GetString(CMDRef)
 	c.PolicyQueueSize = sanitizeIntParam(PolicyQueueSize, defaults.PolicyQueueSize)
 	c.EndpointQueueSize = sanitizeIntParam(EndpointQueueSize, defaults.EndpointQueueSize)
+	c.EndpointGCThreshold = viper.GetDuration(EndpointGCThreshold)
 	c.SelectiveRegeneration = viper.GetBool(SelectiveRegeneration)
 	c.SkipCRDCreation = viper.GetBool(SkipCRDCreation)
 	c.DisableCNPStatusUpdates = viper.GetBool(DisableCNPStatusUpdates)

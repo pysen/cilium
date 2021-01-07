@@ -199,6 +199,14 @@ var (
 	// endpoints, labeled by span name and status ("success" or "failure")
 	EndpointRegenerationTimeStats = NoOpObserverVec
 
+	// EndpointActiveGCCount is a count of goroutines blocking on attempts
+	// to garbage collect an endpoint from the k8s watcher context.
+	EndpointActiveGCCount = NoOpGauge
+
+	// EndpointGCCount is a count of the times that endpoints were garbage
+	// collected via the k8s watcher.
+	EndpointGCCount = NoOpCounter
+
 	// Policy
 
 	// PolicyCount is the number of policies loaded into the agent
@@ -441,6 +449,8 @@ type Configuration struct {
 	EndpointRegenerationCountEnabled        bool
 	EndpointStateCountEnabled               bool
 	EndpointRegenerationTimeStatsEnabled    bool
+	EndpointActiveGCCountEnabled            bool
+	EndpointGCCountEnabled                  bool
 	PolicyCountEnabled                      bool
 	PolicyRegenerationCountEnabled          bool
 	PolicyRegenerationTimeStatsEnabled      bool
@@ -506,6 +516,8 @@ func DefaultMetrics() map[string]struct{} {
 		Namespace + "_endpoint_regenerations":                                        {},
 		Namespace + "_endpoint_state":                                                {},
 		Namespace + "_endpoint_regeneration_time_stats_seconds":                      {},
+		Namespace + "_endpoint_gc_count":                                             {},
+		Namespace + "_endpoint_active_gc_count":                                      {},
 		Namespace + "_policy_count":                                                  {},
 		Namespace + "_policy_regeneration_total":                                     {},
 		Namespace + "_policy_regeneration_time_stats_seconds":                        {},
@@ -684,6 +696,26 @@ func CreateConfiguration(metricsEnabled []string) (Configuration, []prometheus.C
 
 			collectors = append(collectors, PolicyImplementationDelay)
 			c.PolicyImplementationDelayEnabled = true
+
+		case Namespace + "_endpoint_gc_count":
+			EndpointGCCount = prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: Namespace,
+				Name:      "endpoint_gc_count",
+				Help:      "Number of endpoints garbage collected via k8s deletion events",
+			})
+
+			collectors = append(collectors, EndpointGCCount)
+			c.EndpointGCCountEnabled = true
+
+		case Namespace + "_endpoint_active_gc_count":
+			EndpointActiveGCCount = prometheus.NewGauge(prometheus.GaugeOpts{
+				Namespace: Namespace,
+				Name:      "endpoint_active_gc_count",
+				Help:      "Number of active endpoint garbage collection routines",
+			})
+
+			collectors = append(collectors, EndpointActiveGCCount)
+			c.EndpointActiveGCCountEnabled = true
 
 		case Namespace + "_identity_count":
 			IdentityCount = prometheus.NewGauge(prometheus.GaugeOpts{
