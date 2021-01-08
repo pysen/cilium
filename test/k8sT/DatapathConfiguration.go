@@ -266,19 +266,20 @@ var _ = Describe("K8sDatapathConfig", func() {
 			}
 		})
 
-		SkipItIf(func() bool {
-			// Skip K8s versions for which the test is currently flaky.
-			return helpers.SkipK8sVersions(">=1.14.0 <1.20.0") && helpers.SkipQuarantined()
-		}, "Check iptables masquerading with random-fully", func() {
-			deploymentManager.DeployCilium(map[string]string{
-				"bpf.masquerade":      "false",
-				"iptablesRandomFully": "true",
-			}, DeployCiliumOptionsAndDNS)
-			Expect(testPodConnectivityAcrossNodes(kubectl)).Should(BeTrue(), "Connectivity test between nodes failed")
+		It("Check iptables masquerading with random-fully", func() {
+			for i := 0; i < 100; i++ {
+				deploymentManager.DeployCilium(map[string]string{
+					"bpf.masquerade":      "false",
+					"iptablesRandomFully": "true",
+				}, DeployCiliumOptionsAndDNS)
+				Expect(testPodConnectivityAcrossNodes(kubectl)).Should(BeTrue(), "Connectivity test between nodes failed")
 
-			By("Test iptables masquerading")
-			Expect(testPodHTTPToOutside(kubectl, "http://google.com", false, false)).
-				Should(BeTrue(), "Connectivity test to http://google.com failed")
+				By("Test iptables masquerading")
+				Expect(testPodHTTPToOutside(kubectl, "http://google.com", false, false)).
+					Should(BeTrue(), "Connectivity test to http://google.com failed")
+
+				deploymentManager.DeleteAll()
+			}
 		})
 
 		It("Check iptables masquerading without random-fully", func() {
