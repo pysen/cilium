@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -68,10 +67,10 @@ var bpfMetricsListCmd = &cobra.Command{
 }
 
 func listMetrics(m metricsmap.MetricsMap) {
-	bpfMetricsList := make(map[string]string)
+	bpfMetricsList := []*metricsRow{}
 
 	cb := func(key *metricsmap.Key, values *metricsmap.Values) {
-		bpfMetricsList[key.String()] = values.String()
+		bpfMetricsList = append(bpfMetricsList, extractRow(key, values))
 	}
 
 	if err := m.IterateWithCallback(cb); err != nil {
@@ -87,16 +86,10 @@ func listMetrics(m metricsmap.MetricsMap) {
 	listHumanReadableMetrics(bpfMetricsList)
 }
 
-func listJSONMetrics(bpfMetricsList map[string]string) {
+func listJSONMetrics(bpfMetricsList []*metricsRow) {
 	metricsByReason := map[int]jsonMetric{}
 
-	for key, value := range bpfMetricsList {
-		row, err := extractRow(key, value)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
-			continue
-		}
-
+	for _, row := range bpfMetricsList {
 		if _, ok := metricsByReason[row.reasonCode]; !ok {
 			metricsByReason[row.reasonCode] = jsonMetric{
 				Reason:      uint64(row.reasonCode),
@@ -124,7 +117,7 @@ func listJSONMetrics(bpfMetricsList map[string]string) {
 	}
 }
 
-func listHumanReadableMetrics(bpfMetricsList map[string]string) {
+func listHumanReadableMetrics(bpfMetricsList []*metricsRow) {
 	if len(bpfMetricsList) == 0 {
 		fmt.Fprintf(os.Stderr, "No entries found.\n")
 		return
@@ -136,14 +129,7 @@ func listHumanReadableMetrics(bpfMetricsList map[string]string) {
 	const numColumns = 4
 	rows := [][numColumns]string{}
 
-	for key, value := range bpfMetricsList {
-		row, err := extractRow(key, value)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
-			continue
-
-		}
-
+	for _, row := range bpfMetricsList {
 		rows = append(rows, [numColumns]string{row.reasonDesc, row.direction, fmt.Sprintf("%d", row.packets), fmt.Sprintf("%d", row.bytes)})
 	}
 
@@ -166,60 +152,8 @@ func listHumanReadableMetrics(bpfMetricsList map[string]string) {
 	w.Flush()
 }
 
-func extractRow(key, value string) (*metricsRow, error) {
-	reasonCodeStr, directionCodeStr, ok := extractTwoValues(key)
-	if !ok {
-		return nil, fmt.Errorf("cannot extract reason and traffic direction from map's key \"%s\"", key)
-	}
-
-	reasonCode, err := strconv.Atoi(reasonCodeStr)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse reason: %s", err)
-	}
-
-	directionCode, err := strconv.Atoi(directionCodeStr)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse direction: %s", err)
-	}
-
-	packetsStr, bytesStr, ok := extractTwoValues(value)
-	if !ok {
-		return nil, fmt.Errorf("cannot extract packets and bytes counters from map's value \"%s\"", value)
-	}
-
-	packets, err := strconv.Atoi(packetsStr)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse packets counter: %s", err)
-	}
-
-	bytes, err := strconv.Atoi(bytesStr)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse bytes counter: %s", err)
-	}
-
-	reasonDesc := monitorAPI.DropReason(uint8(reasonCode))
-	direction := metricsmap.MetricDirection(uint8(directionCode))
-
-	return &metricsRow{reasonCode, reasonDesc, direction, packets, bytes}, nil
-}
-
-func extractTwoValues(str string) (string, string, bool) {
-	tmp := strings.Split(str, " ")
-	if len(tmp) != 2 {
-		return "", "", false
-	}
-
-	a := strings.Split(tmp[0], ":")
-	if len(a) != 2 {
-		return "", "", false
-	}
-
-	b := strings.Split(tmp[1], ":")
-	if len(b) != 2 {
-		return "", "", false
-	}
-
-	return a[1], b[1], true
+func extractRow(key *metricsmap.Key, values *metricsmap.Values) *metricsRow {
+	return &metricsRow{int(key.Reason), key.DropForwardReason(), key.Direction(), int(values.Count()), int(values.Bytes())}
 }
 
 func init() {
