@@ -267,9 +267,9 @@ func (k *K8sWatcher) WaitForCRDsToRegister(ctx context.Context) error {
 // caches essential for daemon are synchronized.
 // To be called after WaitForCRDsToRegister() so that all needed CRDs have
 // already been registered.
-func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context) <-chan struct{} {
+func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context, cfg WatcherConfiguration) <-chan struct{} {
 	cachesSynced := make(chan struct{})
-	if err := k.EnableK8sWatcher(ctx); err != nil {
+	if err := k.EnableK8sWatcher(ctx, cfg); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			log.WithError(err).Fatal("Unable to start K8s watchers for Cilium")
 		}
@@ -332,9 +332,16 @@ func (k *K8sWatcher) InitK8sSubsystem(ctx context.Context) <-chan struct{} {
 	return cachesSynced
 }
 
+// WatcherConfiguration is the required configuration for EnableK8sWatcher
+type WatcherConfiguration interface {
+	// K8sServiceProxyName must return the value of the proxy name
+	// annotation. If set, only services with this label will be handled.
+	K8sServiceProxyName() string
+}
+
 // EnableK8sWatcher watches for policy, services and endpoint changes on the Kubernetes
 // api server defined in the receiver's daemon k8sClient.
-func (k *K8sWatcher) EnableK8sWatcher(ctx context.Context) error {
+func (k *K8sWatcher) EnableK8sWatcher(ctx context.Context, cfg WatcherConfiguration) error {
 	if !k8s.IsEnabled() {
 		log.Debug("Not enabling k8s event listener because k8s is not enabled")
 		return nil
@@ -348,7 +355,7 @@ func (k *K8sWatcher) EnableK8sWatcher(ctx context.Context) error {
 	swgKNP := lock.NewStoppableWaitGroup()
 	k.networkPoliciesInit(k8s.WatcherClient(), swgKNP)
 
-	serviceOptModifier, err := utils.GetServiceListOptionsModifier()
+	serviceOptModifier, err := utils.GetServiceListOptionsModifier(cfg)
 	if err != nil {
 		return fmt.Errorf("error creating service list option modifier: %w", err)
 	}

@@ -507,7 +507,7 @@ func NewDaemon(ctx context.Context, epMgr *endpointmanager.EndpointManager, dp d
 	// daemon options.
 	if k8s.IsEnabled() {
 		bootstrapStats.k8sInit.Start()
-		d.k8sCachesSynced = d.k8sWatcher.InitK8sSubsystem(d.ctx)
+		d.k8sCachesSynced = d.k8sWatcher.InitK8sSubsystem(d.ctx, option.Config)
 		bootstrapStats.k8sInit.End(true)
 	}
 
