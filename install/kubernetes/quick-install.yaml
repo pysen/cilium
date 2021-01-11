@@ -103,7 +103,7 @@ data:
   #   - disabled
   #   - vxlan (default)
   #   - geneve
-  tunnel: vxlan
+  tunnel: disabled
 
   # Name of the cluster. Only relevant when building a mesh of clusters.
   cluster-name: default
@@ -141,8 +141,8 @@ data:
   # UNIX domain socket for Hubble server to listen to.
   hubble-socket-path:  "/var/run/cilium/hubble.sock"
   ipam: "cluster-pool"
-  cluster-pool-ipv4-cidr: "10.0.0.0/8"
-  cluster-pool-ipv4-mask-size: "24"
+  cluster-pool-ipv4-cidr: "10.22.0.0/16"
+  cluster-pool-ipv4-mask-size: "20"
   disable-cnp-status-updates: "true"
 ---
 # Source: cilium/templates/cilium-agent-clusterrole.yaml
@@ -397,8 +397,7 @@ spec:
                 - cilium
             topologyKey: kubernetes.io/hostname
       containers:
-      - args:
-        - --config-dir=/tmp/cilium/config-map
+      - args: ["--config-dir=/tmp/cilium/config-map", "--enable-endpoint-routes", "--native-routing-cidr", "10.22.0.0/16"]
         command:
         - cilium-agent
         livenessProbe:
